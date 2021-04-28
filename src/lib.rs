@@ -7,7 +7,6 @@ use std::io::Read;
 use std::io::Seek;
 use std::io::SeekFrom;
 use std::os::linux::fs::MetadataExt;
-use std::sync::Arc;
 use std::thread;
 mod work;
 
@@ -40,20 +39,25 @@ pub fn buf_read_sum(filepath: &str) -> i128 {
     sum
 }
 
-pub fn mt_sum(filepath: std::string::String) -> i128 {
+pub fn mt_sum(filepath: &str) -> i128 {
     let filesize = fs::metadata(&filepath).unwrap().st_size();
     let nthreads = num_cpus::get();
     let mut threads = std::vec::Vec::new();
-    let work = work::intervals(nthreads, filesize as usize);
-    let filepath2 = Arc::new(filepath);
+
+    let work = work::align_intervals_to_delim(
+        work::intervals(nthreads, filesize as usize),
+        &mut File::open(&filepath).unwrap(),
+        filesize as usize,
+        b'\n',
+    );
     for w in work {
-        let filepath3 = filepath2.clone();
+        let filepath = String::from(filepath);
         let thread_handle = thread::spawn(move || {
-            let mut f = File::open(&*filepath3).unwrap();
+            let mut f = File::open(&filepath).unwrap();
             let (start, end) = w;
             f.seek(SeekFrom::Start(start as u64)).unwrap();
             let len = end - start + 1;
-            let mut buf: std::vec::Vec<u8> = vec![0, len as u8];
+            let mut buf: std::vec::Vec<u8> = vec![0; len];
             f.read(&mut buf[..]).unwrap();
 
             let mut sum: i128 = 0;
@@ -64,19 +68,14 @@ pub fn mt_sum(filepath: std::string::String) -> i128 {
                 }
             }
             sum
-            // let work = &nums[start..end];
-            // for num in work {
-            //     sum += i128::try_from(*num).unwrap();
-            // }
-            // sum
         });
         threads.push(thread_handle);
     }
     let mut sum: i128 = 0;
     for thr in threads {
-        sum += thr.join().unwrap();
+        let thread_sum = thr.join().unwrap();
+        sum += thread_sum;
     }
-    println!("Avg: {}", sum / nthreads as i128);
     sum
 }
 
@@ -99,6 +98,13 @@ mod tests {
                     }
 
                     #[bench]
+                    fn [<_ $x _bench_mt_read>](b: &mut Bencher) {
+                        let a = stringify!($x);
+                        let path = ["./test/data/", a, ".txt"].join("");
+                        b.iter(|| mt_sum(&path));
+                    }
+
+                    #[bench]
                     fn [<_ $x _bench_read>](b: &mut Bencher) {
                         let a = stringify!($x);
                         let path = ["./test/data/", a, ".txt"].join("");
@@ -110,8 +116,8 @@ mod tests {
     }
 
     genTest![
-        128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144,
-        524288 //,1048576, 2097152, 4194304, 8388608, 16777216, 33554432, 67108864, 134217728
+        128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288,
+        1048576, 2097152, 4194304, 8388608, 16777216, 33554432, 67108864, 134217728
     ];
 
     #[test]
