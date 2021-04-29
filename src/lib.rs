@@ -1,4 +1,4 @@
-#![feature(test)]
+// #![feature(test)]
 use std::fs;
 use std::fs::File;
 use std::io::BufRead;
@@ -10,7 +10,76 @@ use std::os::linux::fs::MetadataExt;
 use std::thread;
 mod work;
 
-extern crate test;
+pub fn read_to_str_sorted(filepath: &str) -> std::vec::Vec<i32> {
+    let mut sorted = vec![];
+    for num in fs::read_to_string(filepath)
+        .expect("Something went wrong reading the file")
+        .lines()
+    {
+        match num.parse::<i32>() {
+            Ok(n) => sorted.push(n),
+            Err(_e) => continue,
+        }
+    }
+    sorted.sort();
+    sorted
+}
+
+pub fn buf_read_sorted(filepath: &str) -> std::vec::Vec<i32> {
+    let f = File::open(filepath).unwrap();
+    let reader = BufReader::new(f);
+    let mut sorted = vec![];
+    for num in reader.lines() {
+        match num.unwrap().parse::<i32>() {
+            Ok(n) => sorted.push(n),
+            Err(_e) => continue,
+        }
+    }
+    sorted.sort();
+    sorted
+}
+
+pub fn mt_sorted(filepath: &str) -> std::vec::Vec<i32> {
+    let filesize = fs::metadata(&filepath).unwrap().st_size();
+    let nthreads = num_cpus::get();
+    let mut threads = std::vec::Vec::new();
+
+    let work = work::align_intervals_to_delim(
+        work::intervals(nthreads, filesize as usize),
+        &mut File::open(&filepath).unwrap(),
+        filesize as usize,
+        b'\n',
+    );
+    for w in work {
+        let filepath = String::from(filepath);
+        let thread_handle = thread::spawn(move || {
+            let mut f = File::open(&filepath).unwrap();
+            let (start, end) = w;
+            f.seek(SeekFrom::Start(start as u64)).unwrap();
+            let len = end - start + 1;
+            let mut buf: std::vec::Vec<u8> = vec![0; len];
+            f.read(&mut buf[..]).unwrap();
+
+            let mut sorted = vec![];
+            for num in buf.lines() {
+                match num.unwrap().parse::<i32>() {
+                    Ok(n) => sorted.push(n),
+                    Err(_e) => continue,
+                }
+            }
+            sorted.sort();
+            sorted
+        });
+        threads.push(thread_handle);
+    }
+    let mut sorted = vec![];
+    for thr in threads {
+        let mut thread_sorted = thr.join().unwrap();
+        sorted.append(&mut thread_sorted);
+    }
+    sorted.sort();
+    sorted
+}
 
 pub fn read_to_str_sum(filepath: &str) -> i128 {
     let mut sum: i128 = 0;
@@ -82,43 +151,43 @@ pub fn mt_sum(filepath: &str) -> i128 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use paste::paste;
-    use test::Bencher;
+    // use paste::paste;
+    // use test::Bencher;
 
-    #[macro_export]
-    macro_rules! genTest {
-        ( $( $x:expr),* ) => {
-            paste! {
-                $(
-                    #[bench]
-                    fn [<_ $x _bench_buf_read>](b: &mut Bencher) {
-                        let a = stringify!($x);
-                        let path = ["./test/data/", a, ".txt"].join("");
-                        b.iter(|| buf_read_sum(&path));
-                    }
+    // #[macro_export]
+    // macro_rules! genTest {
+    //     ( $( $x:expr),* ) => {
+    //         paste! {
+    //             $(
+    //                 #[bench]
+    //                 fn [<_ $x _bench_buf_read>](b: &mut Bencher) {
+    //                     let a = stringify!($x);
+    //                     let path = ["./test/data/", a, ".txt"].join("");
+    //                     b.iter(|| buf_read_sum(&path));
+    //                 }
 
-                    #[bench]
-                    fn [<_ $x _bench_mt_read>](b: &mut Bencher) {
-                        let a = stringify!($x);
-                        let path = ["./test/data/", a, ".txt"].join("");
-                        b.iter(|| mt_sum(&path));
-                    }
+    //                 #[bench]
+    //                 fn [<_ $x _bench_mt_read>](b: &mut Bencher) {
+    //                     let a = stringify!($x);
+    //                     let path = ["./test/data/", a, ".txt"].join("");
+    //                     b.iter(|| mt_sum(&path));
+    //                 }
 
-                    #[bench]
-                    fn [<_ $x _bench_read>](b: &mut Bencher) {
-                        let a = stringify!($x);
-                        let path = ["./test/data/", a, ".txt"].join("");
-                        b.iter(|| read_to_str_sum(&path));
-                    }
-                )*
-            }
-        };
-    }
+    //                 #[bench]
+    //                 fn [<_ $x _bench_read>](b: &mut Bencher) {
+    //                     let a = stringify!($x);
+    //                     let path = ["./test/data/", a, ".txt"].join("");
+    //                     b.iter(|| read_to_str_sum(&path));
+    //                 }
+    //             )*
+    //         }
+    //     };
+    // }
 
-    genTest![
-        128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288,
-        1048576, 2097152, 4194304, 8388608, 16777216, 33554432, 67108864, 134217728
-    ];
+    // genTest![
+    //     128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288,
+    //     1048576, 2097152, 4194304, 8388608, 16777216, 33554432, 67108864, 134217728
+    // ];
 
     #[test]
     fn read_to_str_works() {
@@ -139,5 +208,38 @@ mod tests {
         let path = ["./test/data/", "1024", ".txt"].join("");
         let sum = mt_sum(&path);
         assert_eq!(sum, 4936211233);
+    }
+
+    #[test]
+    fn read_to_str_sorted_works() {
+        let path = ["./test/data/", "1024", ".txt"].join("");
+        let sorted = read_to_str_sorted(&path);
+        let mut previous = &sorted[0];
+        for n in &sorted {
+            assert!(n >= previous);
+            previous = n;
+        }
+    }
+
+    #[test]
+    fn buf_read_sorted_works() {
+        let path = ["./test/data/", "1024", ".txt"].join("");
+        let sorted = buf_read_sorted(&path);
+        let mut previous = &sorted[0];
+        for n in &sorted {
+            assert!(n >= previous);
+            previous = n;
+        }
+    }
+
+    #[test]
+    fn mt_sorted_works() {
+        let path = ["./test/data/", "1024", ".txt"].join("");
+        let sorted = mt_sorted(&path);
+        let mut previous = &sorted[0];
+        for n in &sorted {
+            assert!(n >= previous);
+            previous = n;
+        }
     }
 }
