@@ -1,4 +1,3 @@
-// #![feature(test)]
 use std::fs;
 use std::fs::File;
 use std::io::BufRead;
@@ -151,44 +150,6 @@ pub fn mt_sum(filepath: &str) -> i128 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    // use paste::paste;
-    // use test::Bencher;
-
-    // #[macro_export]
-    // macro_rules! genTest {
-    //     ( $( $x:expr),* ) => {
-    //         paste! {
-    //             $(
-    //                 #[bench]
-    //                 fn [<_ $x _bench_buf_read>](b: &mut Bencher) {
-    //                     let a = stringify!($x);
-    //                     let path = ["./test/data/", a, ".txt"].join("");
-    //                     b.iter(|| buf_read_sum(&path));
-    //                 }
-
-    //                 #[bench]
-    //                 fn [<_ $x _bench_mt_read>](b: &mut Bencher) {
-    //                     let a = stringify!($x);
-    //                     let path = ["./test/data/", a, ".txt"].join("");
-    //                     b.iter(|| mt_sum(&path));
-    //                 }
-
-    //                 #[bench]
-    //                 fn [<_ $x _bench_read>](b: &mut Bencher) {
-    //                     let a = stringify!($x);
-    //                     let path = ["./test/data/", a, ".txt"].join("");
-    //                     b.iter(|| read_to_str_sum(&path));
-    //                 }
-    //             )*
-    //         }
-    //     };
-    // }
-
-    // genTest![
-    //     128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288,
-    //     1048576, 2097152, 4194304, 8388608, 16777216, 33554432, 67108864, 134217728
-    // ];
-
     #[test]
     fn read_to_str_works() {
         let path = ["./test/data/", "1024", ".txt"].join("");
