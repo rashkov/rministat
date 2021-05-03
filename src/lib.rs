@@ -122,16 +122,18 @@ const STUDENT: [[f64; NCONF]; NSTUDENT + 1] = [
     /* 99. */ [1.290, 1.660, 1.984, 2.365, 2.626, 3.175],
     /* 100. */ [1.290, 1.660, 1.984, 2.364, 2.626, 3.174],
 ];
+const MAX_DS: usize = 8;
+const symbol: [char; MAX_DS] = [' ', 'x', '+', '*', '%', '#', '@', 'O'];
 
 pub struct DataSet<'a> {
     name: &'a str,
-    points: std::vec::Vec<i32>,
+    points: std::vec::Vec<i64>,
     sy: i128,
     syy: i128,
 }
 
 impl DataSet<'_> {
-    fn add_point(&mut self, point: i32) {
+    fn add_point(&mut self, point: i64) {
         self.points.push(point);
         self.sy += point as i128;
         self.syy += (point * point) as i128;
@@ -142,24 +144,30 @@ impl DataSet<'_> {
     fn len(&self) -> i128 {
         self.points.len() as i128
     }
-    fn min(&self) -> Option<&i32> {
+    fn min(&self) -> Option<&i64> {
         self.points.first()
     }
-    fn max(&self) -> Option<&i32> {
+    fn max(&self) -> Option<&i64> {
         self.points.last()
     }
-    fn median(&self) -> Option<&i32> {
+    fn median(&self) -> Option<&i64> {
         let l = self.len() as usize;
         self.points.get(l / 2)
     }
     fn avg(&self) -> i128 {
         self.sy / (self.len() as i128)
     }
-    fn var(&self) -> i32 {
-        i32::try_from((self.syy - self.sy * self.sy / self.len()) / (self.len() - 1)).unwrap()
+    fn var(&self) -> i128 {
+        (self.syy - self.sy * self.sy / self.len()) / (self.len() - 1)
     }
     fn stddev(&self) -> f64 {
-        f64::from(self.var()).sqrt()
+        match i64::try_from(self.var()) {
+            Ok(v) => (v as f64).sqrt(),
+            Err(e) => {
+                eprintln!("Unable to compute variance & stddev: {}", e);
+                0.0
+            }
+        }
     }
     fn relative(&self, other: &DataSet, confidx: usize) {
         let i = self.len() + other.len() - 2;
@@ -197,6 +205,22 @@ impl DataSet<'_> {
             );
         }
     }
+    pub fn vitals(&self) {
+        let flag = 1;
+        println!("    N           Min           Max        Median           Avg        Stddev");
+        println!(
+            // "%c %3d %13.8g %13.8g %13.8g %13.8g %13.8g",
+            "{} {:3} {:13.8} {:13.8} {:13.8} {:13.8} {:13.8}",
+            symbol[flag],
+            self.len(),
+            self.min().unwrap_or(&0),
+            self.max().unwrap_or(&0),
+            self.median().unwrap_or(&0),
+            self.avg(),
+            self.stddev()
+        );
+        println!();
+    }
 }
 
 pub fn readset_st(filepath: &str) -> DataSet {
@@ -210,7 +234,7 @@ pub fn readset_st(filepath: &str) -> DataSet {
         .expect("Something went wrong reading the file")
         .lines()
     {
-        match num.parse::<i32>() {
+        match num.parse::<i64>() {
             Ok(n) => ds.add_point(n),
             Err(_e) => continue,
         }
@@ -230,7 +254,7 @@ pub fn readset_mt(filepath: &str) -> DataSet {
         .expect("Something went wrong reading the file")
         .lines()
     {
-        match num.parse::<i32>() {
+        match num.parse::<i64>() {
             Ok(n) => ds.add_point(n),
             Err(_e) => continue,
         }
