@@ -127,12 +127,27 @@ const symbol: [char; MAX_DS] = [' ', 'x', '+', '*', '%', '#', '@', 'O'];
 
 pub struct DataSet<'a> {
     name: &'a str,
-    points: std::vec::Vec<i64>,
+    pub points: std::vec::Vec<i64>,
     sy: i128,
     syy: i128,
 }
 
 impl DataSet<'_> {
+    pub fn new(name: &str) -> DataSet {
+        DataSet {
+            name,
+            points: vec![],
+            sy: 0,
+            syy: 0
+        }
+    }
+    pub fn add_points(&mut self, points: &[i64]){
+        for &point in points {
+            self.points.push(point);
+            self.sy += point as i128;
+            self.syy += (point * point) as i128;
+        }
+    }
     fn add_point(&mut self, point: i64) {
         self.points.push(point);
         self.sy += point as i128;
@@ -144,23 +159,23 @@ impl DataSet<'_> {
     fn len(&self) -> i128 {
         self.points.len() as i128
     }
-    fn min(&self) -> Option<&i64> {
+    pub fn min(&self) -> Option<&i64> {
         self.points.first()
     }
-    fn max(&self) -> Option<&i64> {
+    pub fn max(&self) -> Option<&i64> {
         self.points.last()
     }
     fn median(&self) -> Option<&i64> {
         let l = self.len() as usize;
         self.points.get(l / 2)
     }
-    fn avg(&self) -> i128 {
+    pub fn avg(&self) -> i128 {
         self.sy / (self.len() as i128)
     }
     fn var(&self) -> i128 {
         (self.syy - self.sy * self.sy / self.len()) / (self.len() - 1)
     }
-    fn stddev(&self) -> f64 {
+    pub fn stddev(&self) -> f64 {
         match i64::try_from(self.var()) {
             Ok(v) => (v as f64).sqrt(),
             Err(e) => {
@@ -169,7 +184,7 @@ impl DataSet<'_> {
             }
         }
     }
-    fn relative(&self, other: &DataSet, confidx: usize) {
+    pub fn relative(&self, other: &DataSet, confidx: usize) {
         let i = self.len() + other.len() - 2;
         let mut spool: f64;
         let s: f64;
@@ -186,9 +201,10 @@ impl DataSet<'_> {
             + (other.len() - 1) * (other.var() as i128)) as f64;
         spool /= (self.len() + other.len() - 2) as f64;
         spool = spool.sqrt();
-        s = spool * ((1 / self.len() + 1 / other.len()) as f64).sqrt();
+        s = spool * (1. / (self.len() as f64) + 1. / (other.len() as f64)).sqrt();
         d = (self.avg() - other.avg()) as f64;
         e = t * s;
+
         if d.abs() > e {
             println!("Difference at {:.1} confidence", STUDENTPCT[confidx]);
             println!("	{} +/- {}", d, e);
@@ -456,5 +472,14 @@ mod tests {
             assert!(n >= previous);
             previous = n;
         }
+    }
+
+    #[test]
+    fn add_points_works(){
+        let mut ds = DataSet::new("foo");
+        ds.add_points(&[1,2,3]);
+        assert!(ds.len() == 3);
+        assert!(ds.sy == 6);
+        assert!(ds.syy == 14);
     }
 }
