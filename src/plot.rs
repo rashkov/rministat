@@ -83,12 +83,8 @@ impl Plot {
     }
 
     pub fn data_to_str(&self) -> String {
-        let mut keys = self.data.keys().copied().collect::<Vec<_>>();
-        keys.sort();
-        let first = keys.first().unwrap();
-        let last = keys.last().unwrap();
         let mut output = String::new();
-        for i in (*first..=*last).rev() {
+        for i in (1..self.height).rev() {
             let line = &self
                 .data
                 .get(&i)
