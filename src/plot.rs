@@ -1,4 +1,6 @@
-pub struct Plot<'a> {
+use std::collections::HashMap;
+
+pub struct Plot {
     min: f64,
     max: f64,
     span: f64,
@@ -6,18 +8,18 @@ pub struct Plot<'a> {
     x0: f64,
     dx: f64,
     height: i32,
-    data: Option<&'a str>,
+    data: HashMap<i32, std::vec::Vec<char>>,
     bar: Option<String>,
     separate_bars: bool,
     num_datasets: i32,
 }
 
-impl Plot<'_> {
-    pub fn new<'a>(width: i32, separate: bool, num_datasets: i32) -> Plot<'a> {
+impl Plot {
+    pub fn new<'a>(width: i32, separate: bool, num_datasets: i32) -> Plot {
         Plot {
             width: width,
             height: 0,
-            data: None,
+            data: HashMap::new(),
             bar: None,
             separate_bars: separate,
             num_datasets: num_datasets,
@@ -49,7 +51,7 @@ impl Plot<'_> {
         self.adj_plot((ds.avg() - (ds.stddev() as i128)) as f64);
         self.adj_plot((ds.avg() + (ds.stddev() as i128)) as f64);
     }
-    pub fn plot_set(&mut self, ds: ministat::DataSet, val: i32) {
+    pub fn plot_set(&mut self, ds: ministat::DataSet, sym: char) {
         self.dim_plot(&ds);
         let mut largest_bucket_size = 1;
         let mut last_bucket = -1;
@@ -68,18 +70,40 @@ impl Plot<'_> {
                 current_bucket_count = 1;
                 last_bucket = current_bucket;
             }
+            let row = self
+                .data
+                .entry(current_bucket_count)
+                .or_insert(vec![' '; self.width as usize]);
+            row[current_bucket as usize] = sym;
         }
         largest_bucket_size += 1;
         if largest_bucket_size > self.height {
             self.height = largest_bucket_size;
         }
     }
+
+    pub fn data_to_str(&self) -> String {
+        let mut keys = self.data.keys().copied().collect::<Vec<_>>();
+        keys.sort();
+        let first = keys.first().unwrap();
+        let last = keys.last().unwrap();
+        let mut output = String::new();
+        for i in (*first..=*last).rev() {
+            let line = &self
+                .data
+                .get(&i)
+                .map_or(" ".repeat(self.width as usize), |v| {
+                    v.into_iter().collect::<String>()
+                });
+            output = output + line + "\n";
+        }
+        return output;
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
 
     #[test]
     fn test() {
@@ -87,13 +111,6 @@ mod tests {
         let b: String = a.into_iter().collect();
         assert_eq!(b, "abc");
     }
-
-    // #[test]
-    // fn test2() {
-    //     let mut vikings = HashMap::new();
-    //     vikings.insert(42, "fooobar");
-    //     let a = vikings.get(&42);
-    // }
 
     // DS1: Sample dataset {2, 3, 10}
     // Minimum  min =  2
@@ -106,7 +123,7 @@ mod tests {
     // Mode  mode =  2, 3, 10
     // Standard Deviation  s =  4.3588989
     // Variance  s2 =  19
-    static DS1: [i64; 3] = [2,3,10];
+    static DS1: [i64; 3] = [2, 3, 10];
 
     #[test]
     fn test_dim_plot() {
@@ -128,10 +145,6 @@ mod tests {
 
         // height remains zero because we have not yet plotted the dataset
         assert_eq!(pl.height, 0);
-
-        // expect gen_buckets() == []
-        // expect a hashmap == { 1:  }
-        // expect plot(hashmap) == "..."
     }
 
     #[test]
@@ -143,7 +156,7 @@ mod tests {
         // add DS1 to plot
         let mut ds = ministat::DataSet::new("my_dataset");
         ds.add_points(&DS1);
-        pl.plot_set(ds, 65);
+        pl.plot_set(ds, '*');
 
         // confirm the plot configuration
         assert_eq!(pl.min, 1.); // mean - floor(stddev) = 5 - 4 = 1
@@ -159,8 +172,11 @@ mod tests {
         // max height should therefore be 2, but plot_set adds 1 for buffer, so 3
         assert_eq!(pl.height, 3);
 
-        // expect gen_buckets() == []
-        // expect a hashmap == { 1:  }
-        // expect plot(hashmap) == "..."
+        let mut data = HashMap::new();
+        data.insert(2, vec!['*', ' ', ' ']);
+        data.insert(1, vec!['*', ' ', '*']);
+        assert_eq!(pl.data, data);
+
+        assert_eq!(pl.data_to_str(), "*  \n* *\n")
     }
 }
